@@ -13,8 +13,9 @@ class PingClient(object):
         self.server_port = server_port
         self.count = count
         self.period = period
-        self.timeout = timeout
+        self.timeoutCount = 0
         self.clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.clientSocket.settimeout(timeout)
         # self.clientSocket.connect((server_ip, server_port))
 
     def run(self):
@@ -23,9 +24,13 @@ class PingClient(object):
             pmsg = pingmsg.Pingmsg(8, 0, os.getpid(), seqno, current_milli_time())
             pmsg.setChecksum()
             self.clientSocket.sendto(pmsg.toByte(), (self.server_ip, self.server_port))
-            reply = pingmsg.Pingmsg.fromBytes(self.clientSocket.recv(2048))
-            print(current_milli_time() - reply.getTimestamp())
-            print(reply.verifyChecksum())
+            try:
+                reply = pingmsg.Pingmsg.fromBytes(self.clientSocket.recv(2048))
+                print(current_milli_time() - reply.getTimestamp())
+                print(reply.verifyChecksum())
+            except socket.timeout:
+                self.timeoutCount += 1
+            print(self.timeoutCount)
 
         for seqno in range(self.count):
             t = threading.Timer(self.period/1000 * seqno, _ping, [seqno])
@@ -57,7 +62,7 @@ if __name__ == "__main__":
         elif k == "--period":
             period = int(v)
         elif k == "--timeout":
-            timeout = v
+            timeout = int(v)
     # exit when input malformatted, show usage message
     if not (server_ip and server_port and count and period and timeout):
         sys.exit(errmsg)
