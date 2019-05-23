@@ -45,8 +45,7 @@ class PingClient(object):
             threads.append(threading.Timer(self.period/1000 * seqno, _ping, [seqno]))
             threads[-1].start()
 
-        for seqno in range(self.count):
-            threads[seqno].join()
+        [thread.join() for thread in threads]
 
         end = current_milli_time()
 
