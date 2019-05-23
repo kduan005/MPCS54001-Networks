@@ -4,6 +4,7 @@ import time
 import socket
 import pingmsg
 import threading
+from statistics import mean
 
 class PingClient(object):
     """docstring forPingmsg."""
@@ -26,15 +27,35 @@ class PingClient(object):
             self.clientSocket.sendto(pmsg.toByte(), (self.server_ip, self.server_port))
             try:
                 reply = pingmsg.Pingmsg.fromBytes(self.clientSocket.recv(2048))
-                print(current_milli_time() - reply.getTimestamp())
-                print(reply.verifyChecksum())
+                duration = current_milli_time() - reply.getTimestamp()
+                print("PONG {}: seq={} time={} ms".format(self.server_ip, \
+                seqno+1, duration))
+                durations.append(duration)
+                # print(reply.verifyChecksum())
             except socket.timeout:
                 self.timeoutCount += 1
-            print(self.timeoutCount)
+            # print(self.timeoutCount)
+
+        durations = []
+        print("PING " + self.server_ip)
+
+        start = current_milli_time()
+        threads = []
+        for seqno in range(self.count):
+            threads.append(threading.Timer(self.period/1000 * seqno, _ping, [seqno]))
+            threads[-1].start()
 
         for seqno in range(self.count):
-            t = threading.Timer(self.period/1000 * seqno, _ping, [seqno])
-            t.start()
+            threads[seqno].join()
+
+        end = current_milli_time()
+
+        print("\n--- {} ping statistics ---".format(self.server_ip))
+        print("{} transmitted, {} received, {:.0%} loss, time {}ms".format(\
+        self.count, self.count - self.timeoutCount, self.timeoutCount/self.count,\
+        end - start))
+        print("rtt min/avg/max = {}/{}/{} ms".format(min(durations), \
+        round(mean(durations)),max(durations)))
 
 # https://stackoverflow.com/questions/5998245/get-current-time-in-milliseconds-in-python
 current_milli_time = lambda: int(round(time.time() * 1000))
