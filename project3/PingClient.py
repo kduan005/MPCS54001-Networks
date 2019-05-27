@@ -16,7 +16,7 @@ class PingClient(object):
         self.period = period
         self.timeoutCount = 0
         self.clientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.clientSocket.settimeout(timeout)
+        self.clientSocket.settimeout(timeout/1000)
         # self.clientSocket.connect((server_ip, server_port))
 
     def run(self):
@@ -28,10 +28,13 @@ class PingClient(object):
             try:
                 reply = pingmsg.Pingmsg.fromBytes(self.clientSocket.recv(2048))
                 duration = current_milli_time() - reply.getTimestamp()
-                print("PONG {}: seq={} time={} ms".format(self.server_ip, \
-                seqno+1, duration))
-                durations.append(duration)
-                # print(reply.verifyChecksum())
+                if reply.verifyChecksum():
+                    print("PONG {}: seq={} time={} ms".format(self.server_ip, \
+                    seqno, duration))
+                    durations.append(duration)
+                else:
+                    self.timeoutCount += 1
+                    print("Checksum verification failed for echo reply seqno={}".format(seqno))
             except socket.timeout:
                 self.timeoutCount += 1
             # print(self.timeoutCount)
@@ -41,8 +44,8 @@ class PingClient(object):
 
         start = current_milli_time()
         threads = []
-        for seqno in range(self.count):
-            threads.append(threading.Timer(self.period/1000 * seqno, _ping, [seqno]))
+        for seqno in range(1, self.count+1):
+            threads.append(threading.Timer(self.period/1000 * seqno-1, _ping, [seqno]))
             threads[-1].start()
 
         [thread.join() for thread in threads]
@@ -50,11 +53,17 @@ class PingClient(object):
         end = current_milli_time()
 
         print("\n--- {} ping statistics ---".format(self.server_ip))
-        print("{} transmitted, {} received, {:.0%} loss, time {}ms".format(\
+        print("{} transmitted, {} received, {:.0%} loss, time {} ms".format(\
         self.count, self.count - self.timeoutCount, self.timeoutCount/self.count,\
         end - start))
-        print("rtt min/avg/max = {}/{}/{} ms".format(min(durations), \
-        round(mean(durations)),max(durations)))
+        try:
+            min_duration = min(durations)
+            mean_duration = round(mean(durations))
+            max_duration = max(durations)
+        except:
+            min_duration = mean_duration = max_duration = 0
+        print("rtt min/avg/max = {}/{}/{}".format(min_duration, \
+        mean_duration, max_duration))
 
 # https://stackoverflow.com/questions/5998245/get-current-time-in-milliseconds-in-python
 current_milli_time = lambda: int(round(time.time() * 1000))
